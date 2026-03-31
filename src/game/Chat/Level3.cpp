@@ -1674,22 +1674,29 @@ bool ChatHandler::HandleAddItemCommand(char* args)
         return false;
 
     uint32 itemId = 0;
+    uint32 randomPropertyId = 0;
     if (!ExtractUInt32(&cId, itemId))                       // [name] manual form
     {
         std::string itemName = cId;
         WorldDatabase.escape_string(itemName);
-        auto queryResult = WorldDatabase.PQuery("SELECT entry FROM item_template WHERE name = '%s'", itemName.c_str());
+        auto queryResult = WorldDatabase.PQuery("SELECT entry, RandomProperty FROM item_template WHERE name = '%s'", itemName.c_str());
         if (!queryResult)
         {
             PSendSysMessage(LANG_COMMAND_COULDNOTFIND, cId);
             SetSentErrorMessage(true);
             return false;
         }
-        itemId = queryResult->Fetch()->GetUInt16();
+        Field* fields = queryResult->Fetch();
+        itemId = fields[0].GetUInt32();
+        randomPropertyId = fields[1].GetUInt32();
     }
 
     int32 count;
     if (!ExtractOptInt32(&args, count, 1))
+        return false;
+
+    int32 prefix;
+    if (!ExtractOptInt32(&args, prefix, 0))
         return false;
 
     Player* pl = m_session->GetPlayer();
@@ -1731,7 +1738,14 @@ bool ChatHandler::HandleAddItemCommand(char* args)
         return false;
     }
 
-    Item* item = plTarget->StoreNewItem(dest, itemId, true, Item::GenerateItemRandomPropertyId(itemId));
+    uint32 ench = 0;
+
+    if (pProto->RandomProperty)
+    {
+        ench = prefix > 0 ? prefix : Item::GenerateItemRandomPropertyId(itemId);
+    }
+
+    Item* item = plTarget->StoreNewItem(dest, itemId, true, ench);
 
     // remove binding (let GM give it to another player later)
     if (pl == plTarget)
@@ -5605,7 +5619,7 @@ bool ChatHandler::HandleGMUnkillableCommand(char* args)
     }
     Player* target = m_session->GetPlayer();
     target->SetDeathPrevention(value);
-    PSendSysMessage("GM Unkillability %s.", value ? "enabled" : "disabled");
+    PSendSysMessage("Game Master invincibility %s.", value ? "enabled" : "disabled");
     return true;
 }
 
